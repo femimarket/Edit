@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		148A503F2FE9BDEC00CF2991 /* ProjectService in Frameworks */ = {isa = PBXBuildFile; productRef = 148A503E2FE9BDEC00CF2991 /* ProjectService */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		148A502F2FE9BDB400CF2991 /* ImageEdit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ImageEdit.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				148A503F2FE9BDEC00CF2991 /* ProjectService in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +70,7 @@
 			);
 			name = ImageEdit;
 			packageProductDependencies = (
+				148A503E2FE9BDEC00CF2991 /* ProjectService */,
 			);
 			productName = ImageEdit;
 			productReference = 148A502F2FE9BDB400CF2991 /* ImageEdit.app */;
@@ -94,6 +100,9 @@
 			);
 			mainGroup = 148A50262FE9BDB400CF2991;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				148A503D2FE9BDEC00CF2991 /* XCRemoteSwiftPackageReference "swift-project-service" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 148A50302FE9BDB400CF2991 /* Products */;
 			projectDirPath = "";
@@ -332,6 +341,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		148A503D2FE9BDEC00CF2991 /* XCRemoteSwiftPackageReference "swift-project-service" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/femimarket/swift-project-service";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		148A503E2FE9BDEC00CF2991 /* ProjectService */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 148A503D2FE9BDEC00CF2991 /* XCRemoteSwiftPackageReference "swift-project-service" */;
+			productName = ProjectService;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 148A50272FE9BDB400CF2991 /* Project object */;
 }
