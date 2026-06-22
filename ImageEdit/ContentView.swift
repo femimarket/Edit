@@ -346,9 +346,13 @@ private struct Tile: View {
                     .fill(Color(.secondarySystemFill))
 
                 if let image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
+                    Color.clear
+                        .overlay {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                        }
+                        .clipped()
                 }
 
                 if isSelected {
