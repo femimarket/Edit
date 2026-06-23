@@ -1,142 +1,136 @@
 # ImageEdit
 
-**ImageEdit** is a lightweight, SwiftUI-based iOS application designed for selecting, managing, and triggering image editing workflows. It serves as a gallery interface that aggregates images by recency and provides a clean mechanism to pass a selected image to an external editing service.
+**ImageEdit** is a SwiftUI-based iOS application and library that provides a reusable image selection interface. It allows users to browse, select, import, and delete images stored in the app's documents directory, organizing them by recency.
 
-The project is structured as a Swift Package, making it reusable as a library or embeddable within larger host applications. It relies on `ProjectService` for persistent storage and state management.
+The project is structured as a Swift Package that includes both the core UI components (`ContentView`, `Tile`, `DateBucket`) and a minimal iOS app target (`ImageEditApp`) for demonstration and testing purposes.
 
 ## Features
 
-- **Smart Gallery View**: Displays images in a responsive grid, grouped by date (Today, Yesterday, Last 7 Days, Last 30 Days, Older).
-- **File Import**: Seamlessly import images from the Files app, iCloud Drive, or other providers using the native `fileImporter` API.
-- **Thumbnail Caching**: Efficiently loads and caches high-resolution thumbnails using `NSCache` and `CGImageSource` to maintain performance with large libraries.
-- **Selection State**: Maintains selection state across reloads and clears it if the underlying file is deleted.
-- **Host Integration**: Designed to be triggered by a host application via a closure (`onTrigger`), allowing the host to handle the actual image processing/editing logic.
+- **Image Browsing**: Displays images in a responsive grid, bucketed by date (Today, Yesterday, Last 7 Days, Last 30 Days, Older).
+- **File Import**: Integrates with the system Files picker to import images from iCloud Drive, On My iPhone, or other file providers. Imported images are saved to the app's local `Documents/` directory.
+- **Lazy Thumbnail Loading**: Thumbnails are decoded off the main thread using `CGImageSource` and cached in memory (`NSCache`) for performance.
+- **State Management**: Decoupled from downstream logic. Selection state is managed via `ProjectService`, allowing the view to act as a pure input component.
+- **Haptic Feedback**: Provides sensory feedback on selection and action triggers.
+- **Long-Press Actions**: Supports long-press context menus to delete individual images.
 
 ## Architecture
 
-The project follows a clean separation between UI and service logic:
+The project is built using **SwiftUI** and relies on the `ProjectService` library for file system operations and state management.
 
-1.  **`ContentView.swift`**: The primary UI component. It handles:
-    -   Fetching image URLs from `ProjectService`.
-    -   Grouping images by modification date.
-    -   Managing user interactions (selecting, deleting, importing).
-    -   Triggering the edit action via the `onTrigger` callback.
-2.  **`ImageEditApp.swift`**: The entry point for the standalone app, which simply instantiates `ContentView`.
-3.  **`ProjectService`**: An external dependency (`swift-project-service`) that handles:
-    -   Saving image data to the file system.
-    -   Retrieving all generated files.
-    -   Managing the "currently selected image for editing" state.
+### Key Components
 
-### Key Files
+- **`ContentView`** (`ImageEdit/ContentView.swift`): The primary view controller. It manages the grid layout, handles file imports, and exposes an `onTrigger` callback.
+- **`Tile`** (`ImageEdit/ContentView.swift`): A private view representing a single image. Handles thumbnail loading, caching, and selection state.
+- **`DateBucket`** (`ImageEdit/ContentView.swift`): An enum that categorizes images based on their modification date relative to the current time.
+- **`ProjectService`** (External Dependency): A service layer (from `swift-project-service`) that handles:
+    - `getAllGenerations()`: Retrieves all files in the documents directory.
+    - `saveFile(_:named:)`: Saves imported data to disk.
+    - `setImageEdit(_:)` / `getImageEdit()`: Manages the currently selected image filename.
 
--   `ImageEdit/ContentView.swift`: Contains all UI logic, date bucketing enums, and the `Tile` view for individual image display.
--   `ImageEdit/ImageEditApp.swift`: The `@main` entry point.
--   `Package.swift`: Defines the package structure, dependencies, and platform constraints.
+### Data Flow
 
-## Installation & Setup
+1. **Initialization**: `ContentView` loads all images from `ProjectService` and groups them by date.
+2. **Selection**: When a user taps a tile, `selectedFilename` is updated locally.
+3. **Trigger**: When the "Edit image" button is tapped:
+    - The selected filename is persisted via `ProjectService.setImageEdit(_:)`.
+    - The `onTrigger` closure is called.
+    - Downstream logic (not part of this package) should read the filename via `ProjectService.getImageEdit()` to proceed with the edit action.
 
-### Prerequisites
+## Installation
 
--   **iOS 26.0+**: The project targets iOS 26.0 and above.
--   **Swift 6**: The package uses Swift 6 language mode.
+### Swift Package Manager
 
-### Adding as a Dependency
-
-To use `ImageEdit` in your own Swift Package Manager project, add it to your `Package.swift`:
+Add the package to your `Package.swift` or Xcode project:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/your-username/ImageEdit.git", from: "1.0.0"),
+    .package(url: "https://github.com/femimarket/swift-project-service", branch: "main")
 ]
 ```
 
-Then, add the target dependency to your app's target:
+Then, include the `ImageEdit` target in your application's target dependencies.
 
-```swift
-.target(
-    name: "YourApp",
-    dependencies: [
-        .product(name: "ImageEdit", package: "ImageEdit"),
-    ]
-)
-```
+### Requirements
 
-### Standalone Usage
-
-If you are building the app directly:
-
-1.  Clone the repository.
-2.  Open the project in Xcode (ensure you have the latest toolchain supporting Swift 6 and iOS 26).
-3.  Build and run on a simulator or device.
+- **iOS 26.0+** (as defined in `Package.swift`)
+- **Swift 6.0+**
 
 ## Usage
 
-### As a Library (Host Integration)
+### Basic Integration
 
-The primary use case for `ImageEdit` is as a sub-view within a larger application. You can instantiate `ContentView` and provide a closure to handle the edit trigger.
+To use the image selection view in your own app, instantiate `ContentView` and provide an `onTrigger` closure.
 
 ```swift
 import SwiftUI
 import ImageEdit
 
-struct HostView: View {
+struct MyEditScreen: View {
     var body: some View {
-        ContentView { filename in
-            // This closure is called when the user taps "Edit image"
-            print("User selected image: \(filename)")
-            performEdit(with: filename)
+        ContentView {
+            // This block is called after the user selects an image and taps "Edit image".
+            // The selected filename is now available via ProjectService.getImageEdit().
+            runEditAction()
         }
     }
-    
-    func performEdit(with filename: String) {
-        // Load the image from ProjectService and process it
+
+    func runEditAction() {
+        if let filename = ProjectService.getImageEdit() {
+            print("Editing image: \(filename)")
+            // Proceed with image processing...
+        }
     }
 }
 ```
 
 ### Importing Images
 
-1.  Tap the **"+"** button in the header or the **"Add image"** button in the empty state.
-2.  Select one or more images from the system file picker.
-3.  The images are copied to the app's storage and appear in the gallery, grouped by date.
-4.  The most recently imported image is automatically selected.
+The view automatically handles file imports when the user taps the "+" button. Images are:
+1. Selected via the system `UIActivityViewController` or `PHPickerViewController` (via `fileImporter`).
+2. Copied to the app's `Documents/` directory with a unique name (`img-<UUID>.<ext>`).
+3. Added to the grid view.
 
-### Selecting and Editing
+### Customization
 
-1.  Tap an image tile to select it. A checkmark overlay indicates selection.
-2.  Tap the **"Edit image"** button in the bottom bar.
-3.  This triggers the `onTrigger` closure with the filename of the selected image.
+The `ContentView` is designed to be self-contained. While you cannot easily modify its internal styling without forking, you can control its behavior via the `onTrigger` callback.
 
-### Deleting Images
+## Project Structure
 
-1.  Long-press (or right-click) on an image tile.
-2.  Select **"Delete"** from the context menu.
-3.  The image is removed from storage and the gallery updates immediately.
+```
+.
+├── ImageEdit/
+│   ├── ContentView.swift       # Main UI logic, grid, tile, and date bucketing
+│   ├── ImageEditApp.swift      # Minimal iOS app entry point for testing
+│   └── PrivacyInfo.xcprivacy   # Privacy manifest declaring file timestamp access
+├── Tests/
+│   └── ImageEditTests/
+│       └── DateBucketTests.swift # Unit tests for date bucketing logic
+└── Package.swift               # Swift Package definition
+```
 
-## Technical Details
+## Testing
 
-### Date Bucketing
+The project includes unit tests for the `DateBucket` logic to ensure deterministic date categorization.
 
-Images are categorized into five buckets based on their content modification date:
--   **Today**
--   **Yesterday**
--   **Last 7 Days**
--   **Last 30 Days**
--   **Older**
+### Running Tests
 
-This logic is implemented in the `DateBucket` enum within `ContentView.swift`.
+```bash
+swift test
+```
 
-### Thumbnail Generation
+### Test Coverage
 
-Thumbnails are generated asynchronously in the background to prevent UI jank. The `Tile` view uses:
--   `CGImageSourceCreateThumbnailAtIndex` for efficient thumbnail extraction.
--   `NSCache` to store up to 500 thumbnails, automatically evicting older ones when memory pressure occurs.
--   Cache invalidation when an image is deleted.
+- **`DateBucketTests`**: Verifies that dates are correctly categorized into `today`, `yesterday`, `lastWeek`, `lastMonth`, and `older` buckets. Uses a fixed reference date (`2026-06-22 12:00:00 UTC`) to ensure test stability.
 
-### Security
+## Dependencies
 
-The app handles security-scoped resources correctly when importing files from external providers (e.g., iCloud Drive). It calls `startAccessingSecurityScopedResource()` and ensures `stopAccessingSecurityScopedResource()` is called in a `defer` block.
+- **ProjectService**: `https://github.com/femimarket/swift-project-service` (branch: `main`)
+  - Provides file system abstraction and state management for the selected image.
 
 ## License
 
 This project is licensed under the terms specified in the `LICENSE` file included in the repository.
+
+## Privacy
+
+The app declares access to file timestamps (`NSPrivacyAccessedAPICategoryFileTimestamp`) for the purpose of categorizing images by date in the UI. No user data is collected or transmitted. See `ImageEdit/PrivacyInfo.xcprivacy` for details.

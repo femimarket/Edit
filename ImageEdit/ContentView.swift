@@ -2,18 +2,56 @@
 //  ContentView.swift
 //  ImageEdit
 //
-//  Created by u on 22/06/2026.
-//
 
 import SwiftUI
 import UniformTypeIdentifiers
 import ProjectService
 
-struct ContentView: View {
-    /// Hook the host wires up to actually perform the edit. The screen's
-    /// only job is to set the arg via `ProjectService.setImageEdit` and
-    /// then call this — the work itself happens elsewhere.
-    var onTrigger: ((String) -> Void)? = nil
+/// A self-contained screen for selecting an image from
+/// `ProjectService.getAllGenerations()` and signaling the host to run the
+/// edit action.
+///
+/// ## Contract
+/// The view owns the argument-handoff. When the user taps the
+/// "Edit image" CTA the view:
+/// 1. Writes the selected filename via `ProjectService.setImageEdit(_:)`.
+/// 2. Calls ``onTrigger``.
+///
+/// `onTrigger` is a pure "go" signal — it carries no payload. Read the
+/// filename downstream with `ProjectService.getImageEdit()`. This keeps
+/// the view decoupled from whatever action follows it.
+///
+/// ## Features
+/// - Imports from the system Files picker (iCloud Drive, On My iPhone,
+///   any installed file provider). Images land in the app's `Documents/`
+///   via `ProjectService.saveFile(_:named:)`.
+/// - Grid is bucketed by date (Today, Yesterday, Last 7 / 30 Days, Older)
+///   using file mtime. Lazy thumbnails are decoded off-main and cached.
+/// - Restores the previous selection from `ProjectService.getImageEdit()`
+///   on appear so the CTA is already armed when the user returns.
+/// - Long-press a tile for a Delete action; uses haptic feedback on
+///   selection and trigger.
+///
+/// ## Example
+/// ```swift
+/// ContentView {
+///     // Trigger signal — read the arg from ProjectService and run the
+///     // downstream edit flow.
+///     runEditAction()
+/// }
+/// ```
+public struct ContentView: View {
+    /// Called after the view has set the filename via
+    /// `ProjectService.setImageEdit(_:)`. The callback is a signal
+    /// only — no payload.
+    public var onTrigger: (() -> Void)?
+
+    /// Creates the view.
+    /// - Parameter onTrigger: Pure "go" signal called after the view
+    ///   sets the filename on `ProjectService`. Default is `nil`.
+    public init(onTrigger: (() -> Void)? = nil) {
+        self.onTrigger = onTrigger
+    }
 
     @State private var groups: [DateGroup] = []
     @State private var selectedFilename: String? = nil
@@ -26,7 +64,7 @@ struct ContentView: View {
         GridItem(.adaptive(minimum: 108, maximum: 180), spacing: 10)
     ]
 
-    var body: some View {
+    public var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 0) {
                 header
@@ -108,7 +146,9 @@ struct ContentView: View {
             }
             .buttonStyle(.glass)
             .disabled(isImporting)
-            .accessibilityLabel(isImporting ? "Importing images" : "Add image from Files")
+            .accessibilityLabel(
+                Text(isImporting ? "Importing images" : "Add image from Files")
+            )
         }
     }
 
@@ -116,7 +156,7 @@ struct ContentView: View {
 
     private func sectionHeader(_ group: DateGroup) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text(group.id.title)
+            Text(group.id.titleKey)
                 .font(.title2.weight(.semibold))
                 .foregroundStyle(.primary)
                 .accessibilityAddTraits(.isHeader)
@@ -124,7 +164,7 @@ struct ContentView: View {
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
-                .accessibilityLabel("\(group.urls.count) images")
+                .accessibilityLabel(Text("\(group.urls.count) images"))
             Spacer()
         }
         .padding(.horizontal, 4)
@@ -160,13 +200,17 @@ struct ContentView: View {
             Button {
                 isPickingFile = true
             } label: {
-                Label("Add image", systemImage: "plus")
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 4)
+                Label {
+                    Text("Add image")
+                } icon: {
+                    Image(systemName: "plus")
+                }
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
             }
             .buttonStyle(.glassProminent)
-            .accessibilityLabel("Add image from Files")
+            .accessibilityLabel(Text("Add image from Files"))
         }
     }
 
@@ -179,7 +223,7 @@ struct ContentView: View {
                 Button {
                     ProjectService.setImageEdit(selectedFilename)
                     triggerPulse &+= 1
-                    onTrigger?(selectedFilename)
+                    onTrigger?()
                 } label: {
                     HStack(spacing: 10) {
                         Text("Edit image")
@@ -192,8 +236,8 @@ struct ContentView: View {
                     .padding(.vertical, 12)
                 }
                 .buttonStyle(.glassProminent)
-                .accessibilityLabel("Edit image")
-                .accessibilityHint("Triggers the edit action with the selected image")
+                .accessibilityLabel(Text("Edit image"))
+                .accessibilityHint(Text("Triggers the edit action with the selected image"))
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 12)
@@ -226,8 +270,6 @@ struct ContentView: View {
             return DateGroup(id: bucket, urls: urls)
         }
 
-        // Restore selection if the stored arg still exists; clear if the
-        // currently selected file vanished (e.g. just deleted).
         let allNames = Set(dated.map { $0.0.lastPathComponent })
         if selectedFilename == nil,
            let stored = ProjectService.getImageEdit(),
@@ -293,7 +335,7 @@ struct ContentView: View {
 enum DateBucket: Int, CaseIterable, Identifiable {
     case today, yesterday, lastWeek, lastMonth, older
     var id: Int { rawValue }
-    var title: String {
+    var titleKey: LocalizedStringKey {
         switch self {
         case .today:     return "Today"
         case .yesterday: return "Yesterday"
@@ -374,11 +416,15 @@ private struct Tile: View {
         .buttonStyle(.plain)
         .contextMenu {
             Button(role: .destructive, action: onDelete) {
-                Label("Delete", systemImage: "trash")
+                Label {
+                    Text("Delete")
+                } icon: {
+                    Image(systemName: "trash")
+                }
             }
         }
-        .accessibilityLabel(isSelected ? "Image, selected" : "Image")
-        .accessibilityHint("Double tap to select. Long press for options.")
+        .accessibilityLabel(Text(isSelected ? "Image, selected" : "Image"))
+        .accessibilityHint(Text("Double tap to select. Long press for options."))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .task(id: url) { await loadThumb() }
     }

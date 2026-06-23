@@ -4,6 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "ImageEdit",
+    defaultLocalization: "en",
     platforms: [
         .iOS(.v26)
     ],
@@ -26,7 +27,15 @@ let package = Package(
             exclude: [
                 "ImageEditApp.swift",
                 "Assets.xcassets",
+            ],
+            resources: [
+                .copy("PrivacyInfo.xcprivacy"),
             ]
+        ),
+        .testTarget(
+            name: "ImageEditTests",
+            dependencies: ["ImageEdit"],
+            path: "Tests/ImageEditTests"
         ),
     ],
     swiftLanguageModes: [.v6]
