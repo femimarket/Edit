@@ -1,0 +1,15 @@
+{
+  "originHash" : "b4ed830f8fc44d882d96250d5876261d36230fcb3c10e37cdd96e69610618bb8",
+  "pins" : [
+    {
+      "identity" : "swift-project-service",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/femimarket/swift-project-service",
+      "state" : {
+        "branch" : "main",
+        "revision" : "4be286ba6da864c7c7ee8f73560762ddd03886c0"
+      }
+    }
+  ],
+  "version" : 3
+}

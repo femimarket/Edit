@@ -261,9 +261,8 @@ public struct ContentView: View {
         }.sorted { $0.1 > $1.1 }
 
         var bucketMap: [DateBucket: [URL]] = [:]
-        let now = Date()
         for (url, date) in dated {
-            bucketMap[DateBucket.from(date, now: now), default: []].append(url)
+            bucketMap[DateBucket.from(date), default: []].append(url)
         }
         groups = DateBucket.allCases.compactMap { bucket in
             guard let urls = bucketMap[bucket], !urls.isEmpty else { return nil }
@@ -344,11 +343,16 @@ enum DateBucket: Int, CaseIterable, Identifiable {
         case .older:     return "Older"
         }
     }
-    static func from(_ date: Date, now: Date) -> DateBucket {
+    static func from(_ date: Date) -> DateBucket {
         let cal = Calendar.current
+        let now = Date()
         if cal.isDateInToday(date) { return .today }
         if cal.isDateInYesterday(date) { return .yesterday }
-        let days = cal.dateComponents([.day], from: date, to: now).day ?? 0
+        let days = cal.dateComponents(
+            [.day],
+            from: cal.startOfDay(for: date),
+            to: cal.startOfDay(for: now)
+        ).day ?? 0
         if days <= 7  { return .lastWeek }
         if days <= 30 { return .lastMonth }
         return .older
