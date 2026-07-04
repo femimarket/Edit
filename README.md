@@ -1,100 +1,192 @@
 # ImageEdit
 
-A SwiftUI-based iOS component that provides a polished, date-bucketed gallery interface for browsing, selecting, and importing images. It integrates with `ProjectService` to manage file persistence, selection state, and trigger downstream edit workflows without tightly coupling the UI to the action handler.
+A cross-platform, self-contained UI component for selecting and editing images.
+
+`ImageEdit` provides a unified image selection interface available on **iOS (SwiftUI)**, **Android (Jetpack Compose)**, and **Web (Compose Multiplatform)**. It manages the full lifecycle of image selection: importing from system pickers, displaying a date-bucketed grid of thumbnails, handling selection state, and signaling the host application to proceed with an edit action.
 
 ## Features
 
-- **System Files Picker Integration**: Import images from iCloud Drive, On My iPhone, or any installed file provider. Imported files are saved to the app's `Documents/` directory.
-- **Date-Bucketed Gallery**: Images are automatically grouped into `Today`, `Yesterday`, `Last 7 Days`, `Last 30 Days`, and `Older` sections based on file modification time.
-- **Lazy Thumbnail Decoding**: Thumbnails are generated off the main thread using `CGImageSource` and cached in memory for smooth scrolling.
-- **Persistent Selection State**: The previously selected image is restored on view appearance, keeping the CTA pre-armed for quick actions.
-- **Haptic Feedback**: Subtle selection and success haptics on tile tap and trigger.
-- **Context Menu Deletion**: Long-press any tile to delete it, with automatic cache invalidation and state cleanup.
-- **Decoupled Trigger Pattern**: The view never passes payloads to its callback. It writes the selected filename to `ProjectService` and emits a pure `onTrigger` signal.
+*   **Cross-Platform Consistency**: Identical logic and UI structure across iOS, Android, and Web.
+*   **Date-Bucketed Grid**: Images are automatically grouped into sections: *Today*, *Yesterday*, *Last 7 Days*, *Last 30 Days*, and *Older*.
+*   **Lazy Thumbnail Loading**: Thumbnails are decoded off the main thread and cached to ensure smooth scrolling.
+*   **System File Picker Integration**:
+    *   **iOS**: Uses `UIActivityViewController`/`PHPicker` via `fileImporter`.
+    *   **Android**: Uses the system document picker (`OpenMultipleDocuments`).
+    *   **Web**: Uses the File System Access API (`showOpenFilePicker`) with OPFS storage.
+*   **State Persistence**: Restores the previously selected image on appearance.
+*   **Haptic Feedback**: Provides tactile feedback on selection and trigger (iOS/Android).
+*   **Dark Mode Support**: Automatically adapts to the system theme using semantic color palettes.
 
-## Architecture & Key Files
+## Architecture
 
-| Path | Purpose |
-|------|---------|
-| `ImageEdit/ContentView.swift` | Core UI, business logic, date bucketing, tile rendering, and thumbnail loading. Contains the `DateBucket` enum and `Tile` view. |
-| `ImageEdit/ImageEditApp.swift` | SwiftUI `@main` entry point. Provided for standalone preview/demo purposes. |
-| `Package.swift` | Swift Package Manager manifest. Configures the project as a reusable library targeting iOS 26+ with Swift 6. |
-| `Tests/ImageEditTests/DateBucketTests.swift` | Swift Testing suite validating the date bucketing algorithm and edge cases. |
+The project is structured as a multi-platform library with a shared core logic pattern implemented in platform-specific UI frameworks.
 
-### Module Structure
-The SPM target is configured as a library. `ImageEditApp.swift` and `Assets.xcassets` are explicitly excluded from the library target to prevent duplication when the component is integrated into a host app. The `PrivacyInfo.xcprivacy` resource is bundled automatically.
+### Project Structure
 
-## Installation & Setup
+```text
+ImageEdit/
+├── ImageEdit/                  # iOS SwiftUI Implementation
+│   ├── ContentView.swift       # Main view logic, grid, and selection handling
+│   └── ImageEditApp.swift      # iOS App entry point
+├── Kmp/                        # Kotlin Multiplatform Implementation
+│   ├── imageedit/
+│   │   ├── src/androidMain/    # Android Jetpack Compose Implementation
+│   │   │   └── market/femi/imageedit/ImageEdit.kt
+│   │   └── src/webMain/        # Web Compose Multiplatform Implementation
+│   │       └── market/femi/imageedit/ImageEdit.kt
+│   └── demo/                   # Demo applications for Android
+├── Tests/                      # Unit Tests
+│   └── ImageEditTests/         # Swift Testing framework tests for DateBucket
+└── Package.swift               # Swift Package Manager manifest
+```
 
-### Swift Package Manager
-Add the package to your Xcode project or `Package.swift`:
+### Key Components
+
+1.  **`ContentView` (iOS) / `ImageEdit` (KMP)**:
+    *   The primary entry point.
+    *   Manages the state of the grid (`groups`), selected filename (`selectedFilename`), and import status (`isImporting`).
+    *   Handles the `onTrigger` callback, which is a pure "go" signal without payload.
+
+2.  **`ProjectService`**:
+    *   An external dependency (`swift-project-service`) that handles file I/O.
+    *   **Contract**: The view writes the selected filename to `ProjectService.setImageEdit(_:)` before triggering. Downstream consumers read the filename via `ProjectService.getImageEdit()`.
+    *   Files are stored in the app's `Documents/` directory (iOS) or equivalent storage (Android/Web).
+
+3.  **`DateBucket`**:
+    *   An enum (`today`, `yesterday`, `lastWeek`, `lastMonth`, `older`) that categorizes images based on their modification time (`mtime`).
+    *   Logic is mirrored in Swift (`DateBucket.swift`), Kotlin Android (`ImageEdit.kt`), and Kotlin Web (`ImageEdit.kt`).
+
+4.  **`Tile`**:
+    *   A reusable component representing a single image in the grid.
+    *   Handles thumbnail loading, caching, selection state, and long-press context menus (Delete).
+
+## Installation
+
+### iOS (Swift Package Manager)
+
+Add the package to your `Package.swift` or Xcode project:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/femimarket/swift-project-service", branch: "main")
+    .package(url: "https://github.com/femimarket/swift-project-service", branch: "main"),
 ]
 ```
 
-### Requirements
-- **iOS**: 26+
-- **Swift**: 6
-- **Dependencies**: `swift-project-service` (automatically resolved)
+Include the `ImageEdit` target in your app's dependencies.
 
-Build via command line:
-```bash
-swift build
-swift test
+### Android & Web (Kotlin Multiplatform)
+
+The KMP module is located in `Kmp/imageedit`. Import it into your `build.gradle.kts`:
+
+```kotlin
+dependencies {
+    implementation(project(":imageedit"))
+    // Ensure ProjectService is available
+    implementation("market.femi.api:project-service:latest") 
+}
 ```
 
-## Usage & Integration
+## Usage
 
-Embed `ContentView` in your app's view hierarchy and provide an `onTrigger` closure to handle the downstream edit flow.
+### iOS
+
+Import the module and instantiate `ContentView` in your SwiftUI view hierarchy.
 
 ```swift
+import SwiftUI
+import ImageEdit
+
 struct HostView: View {
     var body: some View {
         ContentView {
-            // Trigger signal — read the arg from ProjectService and run the
-            // downstream edit flow.
+            // This block is called after the user selects an image and taps "Edit image".
+            // The filename is now available via ProjectService.getImageEdit().
             runEditAction()
         }
     }
-
-    private func runEditAction() {
-        guard let filename = ProjectService.getImageEdit() else { return }
-        // Proceed with edit workflow using `filename`
+    
+    func runEditAction() {
+        if let filename = ProjectService.getImageEdit() {
+            // Proceed with editing `filename`
+        }
     }
 }
 ```
 
-### The Trigger Contract
-`ContentView` follows a strict decoupling pattern:
-1. When the user taps **Edit image**, the view writes the selected filename via `ProjectService.setImageEdit(_:)`.
-2. It then calls `onTrigger`.
-3. `onTrigger` is a pure signal with no payload. The host reads the filename downstream using `ProjectService.getImageEdit()`.
+### Android
 
-This keeps `ContentView` purely presentational, highly testable, and agnostic to the actual edit implementation.
+Use the `ImageEdit` composable in your Jetpack Compose activity.
 
-## Non-Obvious Conventions & Design Decisions
+```kotlin
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent {
+            ImageEditTheme {
+                Surface(modifier = Modifier.fillMaxSize()) {
+                    ImageEdit(onTrigger = {
+                        // Triggered after selection.
+                        // Read filename from ProjectService.getImageEdit()
+                    })
+                }
+            }
+        }
+    }
+}
+```
 
-- **Thumbnail Caching Strategy**: Uses `NSCache<NSString, UIImage>` with a hard limit of 500 images. Thumbnails are generated at `max(320, 180 * displayScale)` pixels to balance quality and memory. The cache is automatically invalidated when a file is deleted via `Tile.invalidateThumb(for:)`.
-- **Date Bucketing Logic**: `DateBucket.from(_:)` uses `Calendar.current` to compute strict boundaries. The enum conforms to `CaseIterable` and drives the UI section order (newest to oldest).
-- **Asynchronous File Import**: Imported files are processed in a `Task.detached(priority: .userInitiated)` to prevent UI blocking. Security-scoped resources are properly opened and closed. The last imported file is auto-selected upon completion.
-- **State Restoration**: On `.task { reload() }`, the view checks `ProjectService.getImageEdit()` against the current file list. If the stored filename still exists, it's restored; otherwise, selection is cleared.
-- **Swift 6 Strict Concurrency**: The codebase is structured for Swift 6 mode. Async thumbnail loading and detached tasks are used to maintain main-thread responsiveness without explicit `@MainActor` annotations on the view itself.
+### Web
+
+The usage is identical to Android, as both use Compose Multiplatform.
+
+```kotlin
+@Composable
+fun App() {
+    ImageEdit(onTrigger = {
+        // Handle trigger
+    })
+}
+```
+
+## How It Works
+
+### 1. Initialization
+On appear, the view calls `reload()` (iOS) or `LaunchedEffect(Unit) { reload() }` (KMP). This fetches all files from `ProjectService.getAllGenerations()`, filters for image extensions, and sorts them by modification date.
+
+### 2. Date Bucketing
+Files are grouped into `DateBucket` categories. The logic calculates the difference in days between the file's modification date and the current date to determine the bucket.
+
+### 3. Thumbnail Loading
+*   **iOS**: Uses `CGImageSourceCreateThumbnailAtIndex` with a max pixel size of `max(320, 180 * displayScale)`. Thumbnails are cached in an `NSCache`.
+*   **Android**: Uses `BitmapFactory` with `inSampleSize` to decode down to the target size. EXIF orientation is applied to ensure images are upright. Cached in an `LruCache`.
+*   **Web**: Reads bytes from OPFS and decodes via Skia (`decodeImageBitmap`). Cached in a `LinkedHashMap` (LRU).
+
+### 4. Selection & Trigger
+*   Tapping a tile selects it (haptic feedback on iOS/Android).
+*   Tapping "Edit image" in the bottom bar:
+    1.  Writes the filename to `ProjectService.setImageEdit(filename)`.
+    2.  Triggers haptic success (iOS/Android).
+    3.  Invokes the `onTrigger` closure.
+
+### 5. Importing Images
+*   Tapping the "+" button opens the system file picker.
+*   Selected files are read and saved to `ProjectService` with a generated name (`img-<UUID>.<ext>`).
+*   The grid refreshes, and the newly imported image is automatically selected.
+
+## Non-Obvious Conventions
+
+*   **Decoupled Trigger**: The `onTrigger` callback does not receive the filename. The view is responsible for writing the state to `ProjectService`. This keeps the view agnostic of the downstream edit logic.
+*   **Security Scoped Resources (iOS)**: When importing from iCloud or other providers, the view handles `startAccessingSecurityScopedResource` and `stopAccessingSecurityScopedResource` to ensure file access.
+*   **EXIF Orientation (Android)**: Android thumbnails explicitly apply EXIF orientation transforms to match iOS behavior, where `CGImageSource` handles this automatically.
+*   **Web OPFS**: On Web, imported files are staged in the Origin Private File System (OPFS) before being saved to the `ProjectService` storage location.
 
 ## Testing
 
-Unit tests are located in `Tests/ImageEditTests/DateBucketTests.swift` and cover:
-- Boundary conditions for each date bucket
-- Correct ordering of `DateBucket.allCases`
-- Edge cases like `.distantPast` and exact day thresholds
+Run the Swift unit tests for the `DateBucket` logic:
 
-Run tests with:
 ```bash
 swift test
 ```
 
-## License
-
-This project is provided as-is. Ensure compliance with the `swift-project-service` dependency license when integrating.
+This verifies the date bucketing boundaries (Today, Yesterday, Last 7/30 Days, Older).

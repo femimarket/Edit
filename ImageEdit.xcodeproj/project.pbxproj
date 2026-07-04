@@ -15,6 +15,14 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		144C74372FF9100B00F25806 /* Kmp */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			explicitFolders = (
+				demo/build/intermediates/merged_jni_libs,
+			);
+			path = Kmp;
+			sourceTree = "<group>";
+		};
 		148A50312FE9BDB400CF2991 /* ImageEdit */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = ImageEdit;
@@ -39,6 +47,7 @@
 			children = (
 				148A50312FE9BDB400CF2991 /* ImageEdit */,
 				148A50302FE9BDB400CF2991 /* Products */,
+				144C74372FF9100B00F25806 /* Kmp */,
 			);
 			sourceTree = "<group>";
 		};
@@ -66,6 +75,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
+				144C74372FF9100B00F25806 /* Kmp */,
 				148A50312FE9BDB400CF2991 /* ImageEdit */,
 			);
 			name = ImageEdit;
